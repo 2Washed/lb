@@ -22,3 +22,10 @@
 - mutex, Pros: Simple, Good for complex logic. Cons: Blocks other requests, more overhead
 - atomic int, Pros: Lock-free (nonblocking), Very fast. Cons: Only works for single variables, harder to extends to complex logic
 ```
+
+## Version 2
+- Load balancer that only routes to healthy servers
+```
+- use goroutines to periodically check if servers are healthy
+- only forward requests to healthy servers
+```
