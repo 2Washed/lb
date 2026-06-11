@@ -6,6 +6,14 @@ import (
 	"net/http"
 )
 
+var servers = []string{
+	"127.0.0.1:9000",
+	"127.0.0.1:9001",
+	"127.0.0.1:9002",
+}
+
+var i int
+
 func main() {
 	http.HandleFunc("/", requestHandler)
 	http.ListenAndServe(":8080", nil)
@@ -15,8 +23,13 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 	//Clone request
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
-	outReq.URL.Host = "127.0.0.1:9000"
 	outReq.RequestURI = ""
+
+	serverIndex := i % len(servers)
+	i++
+
+	target := servers[serverIndex]
+	outReq.URL.Host = target
 
 	//Forward the request
 	res, forwardErr := http.DefaultClient.Do(outReq)
