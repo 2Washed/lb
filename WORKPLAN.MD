@@ -13,3 +13,12 @@
 - Add support for multiple servers
 - Use round robin algorithm
 ```
+
+## Version 1.5
+
+- Concurrency safe round robin
+```
+2 Solutions:
+- mutex, Pros: Simple, Good for complex logic. Cons: Blocks other requests, more overhead
+- atomic int, Pros: Lock-free (nonblocking), Very fast. Cons: Only works for single variables, harder to extends to complex logic
+```

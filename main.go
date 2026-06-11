@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync/atomic"
 )
 
 var servers = []string{
@@ -12,7 +13,7 @@ var servers = []string{
 	"127.0.0.1:9002",
 }
 
-var i int
+var i atomic.Int64
 
 func main() {
 	http.HandleFunc("/", requestHandler)
@@ -25,8 +26,8 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
 
-	serverIndex := i % len(servers)
-	i++
+	serverIndex := int(i.Load()) % len(servers)
+	i.Add(1)
 
 	target := servers[serverIndex]
 	outReq.URL.Host = target
