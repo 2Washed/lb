@@ -26,11 +26,7 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
 
-	serverIndex := int(i.Load()) % len(servers)
-	i.Add(1)
-
-	target := servers[serverIndex]
-	outReq.URL.Host = target
+	outReq.URL.Host = getServer()
 
 	//Forward the request
 	res, forwardErr := http.DefaultClient.Do(outReq)
@@ -57,4 +53,9 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write(nil)
 		return
 	}
+}
+
+func getServer() string {
+	serverIndex := int(i.Add(1)) % len(servers)
+	return servers[serverIndex]
 }
