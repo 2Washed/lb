@@ -29,3 +29,11 @@
 - use goroutines to periodically check if servers are healthy
 - only forward requests to healthy servers
 ```
+
+## Version 3 
+- A load balancer with failover
+```
+- Detect backend failures during request forwarding
+- Retry another healthy backend
+- Configure maximum retry attempts
+```
