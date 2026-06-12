@@ -60,31 +60,20 @@ func main() {
 }
 
 func requestHandler(w http.ResponseWriter, req *http.Request) {
-	//Clone request
-	outReq := req.Clone(req.Context())
-	outReq.URL.Scheme = "http"
-	outReq.RequestURI = ""
-
 	host, noServerErr := getServer()
 	if noServerErr != nil {
 		log.Printf("[ERROR] %v\n", noServerErr)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	outReq.URL.Host = host
-	outReq.Host = host
 
-	//Forward the request
-	res, forwardErr := http.DefaultClient.Do(outReq)
+	res, forwardErr := forwardRequest(req, host)
 	if forwardErr != nil {
-		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
-		return
 	}
 	defer res.Body.Close()
 
-	//Write headers
 	for headerName, headerValues := range res.Header {
 		for _, v := range headerValues {
 			w.Header().Add(headerName, v)
@@ -99,6 +88,22 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write(nil)
 		return
 	}
+}
+
+func forwardRequest(req *http.Request, host string) (*http.Response, error) {
+	outReq := req.Clone(req.Context())
+	outReq.URL.Scheme = "http"
+	outReq.RequestURI = ""
+	outReq.URL.Host = host
+	outReq.Host = host
+
+	res, forwardErr := http.DefaultClient.Do(outReq)
+	if forwardErr != nil {
+		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
+		return nil, fmt.Errorf("forwarding request to host: %s failed", host)
+	}
+
+	return res, nil
 }
 
 func getServer() (string, error) {
