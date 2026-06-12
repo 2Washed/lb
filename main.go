@@ -32,31 +32,40 @@ var servers = []*Server{
 var healthyServers atomic.Value
 
 const HEALTH_CHECK_DURATION_SECONDS = 10
+const MAX_RETRIES = 3
 
 var i atomic.Int64
 
 func main() {
-	healthyServers.Store(servers)
+	for _, server := range servers {
+		updateServerHealth(server)
+	}
+	rebuildHealthyServers()
 
 	go func() {
 		for {
 			for _, server := range servers {
 				updateServerHealth(server)
 			}
-			okServers := filter(servers, func(server *Server) bool {
-				server.mu.RLock()
-				healthy := server.healthy
-				server.mu.RUnlock()
-				return healthy
-			})
-			healthyServers.Store(okServers)
+			rebuildHealthyServers()
 
-			time.Sleep(HEALTH_CHECK_DURATION_SECONDS)
+			time.Sleep(HEALTH_CHECK_DURATION_SECONDS * time.Second)
 		}
 	}()
 
 	http.HandleFunc("/", requestHandler)
 	http.ListenAndServe(":8080", nil)
+}
+
+func rebuildHealthyServers() {
+	okServers := filter(servers, func(server *Server) bool {
+		server.mu.RLock()
+		healthy := server.healthy
+		server.mu.RUnlock()
+		return healthy
+	})
+	healthyServers.Store(okServers)
+
 }
 
 func requestHandler(w http.ResponseWriter, req *http.Request) {
@@ -67,11 +76,41 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	res, forwardErr := forwardRequest(req, host)
-	if forwardErr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(nil)
+	canRetry := false
+	switch req.Method {
+	case http.MethodPost, http.MethodPatch:
+		canRetry = false
+	default:
+		canRetry = true
 	}
+
+	res, forwardErr := forwardRequest(req, host.url)
+	retries := 0
+	for forwardErr != nil && retries < MAX_RETRIES && canRetry {
+		host.mu.Lock()
+		host.healthy = false
+		host.mu.Unlock()
+		rebuildHealthyServers()
+
+		log.Println("RETRYING")
+
+		host, noServerErr = getServer()
+		if noServerErr != nil {
+			log.Printf("[ERROR] %v\n", noServerErr)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		res, forwardErr = forwardRequest(req, host.url)
+		retries++
+	}
+
+	if forwardErr != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write(nil)
+		return
+	}
+
 	defer res.Body.Close()
 
 	for headerName, headerValues := range res.Header {
@@ -84,8 +123,6 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 	_, copyErr := io.Copy(w, res.Body)
 	if copyErr != nil {
 		log.Printf("[ERROR] Copying request to client failed, Error: %v\n", copyErr)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(nil)
 		return
 	}
 }
@@ -106,21 +143,20 @@ func forwardRequest(req *http.Request, host string) (*http.Response, error) {
 	return res, nil
 }
 
-func getServer() (string, error) {
+func getServer() (*Server, error) {
 	raw := healthyServers.Load()
 	if raw == nil {
-		return "", fmt.Errorf("no healthy servers available")
+		return nil, fmt.Errorf("no healthy servers available")
 	}
 
 	servers := raw.([]*Server)
 	if len(servers) == 0 {
-		return "", fmt.Errorf("no healthy servers available")
+		return nil, fmt.Errorf("no healthy servers available")
 	}
 
 	idx := i.Add(1)
 	serverIndex := int(idx) % len(servers)
-	serverUrl := servers[serverIndex].url
-	return serverUrl, nil
+	return servers[serverIndex], nil
 }
 
 func updateServerHealth(server *Server) {
