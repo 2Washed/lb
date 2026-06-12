@@ -30,11 +30,11 @@ var servers = []*Server{
 }
 
 var healthyServers atomic.Value
+var i atomic.Int64
+var rebuildMy sync.Mutex
 
 const HEALTH_CHECK_DURATION_SECONDS = 10
 const MAX_RETRIES = 3
-
-var i atomic.Int64
 
 func main() {
 	for _, server := range servers {
@@ -44,9 +44,15 @@ func main() {
 
 	go func() {
 		for {
+			var healthCheckWg sync.WaitGroup
 			for _, server := range servers {
-				updateServerHealth(server)
+				healthCheckWg.Add(1)
+				go func(server *Server) {
+					defer healthCheckWg.Done()
+					updateServerHealth(server)
+				}(server)
 			}
+			healthCheckWg.Wait()
 			rebuildHealthyServers()
 
 			time.Sleep(HEALTH_CHECK_DURATION_SECONDS * time.Second)
@@ -58,6 +64,13 @@ func main() {
 }
 
 func rebuildHealthyServers() {
+	// Suppose we have N requests going to the same server and they fail, each request will call this method which will result in N updates to healthyServers
+	// Added lock so that only 1 request gets to update healthy servers, while the others will proceed to retry (which can fail if we land on the server actively being marked as unhealthy)
+	if !rebuildMy.TryLock() {
+		return
+	}
+	defer rebuildMy.Unlock()
+
 	okServers := filter(servers, func(server *Server) bool {
 		server.mu.RLock()
 		healthy := server.healthy
@@ -78,14 +91,12 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 
 	canRetry := false
 	switch req.Method {
-	case http.MethodPost, http.MethodPatch:
-		canRetry = false
-	default:
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		canRetry = true
 	}
 
 	res, forwardErr := forwardRequest(req, host.url)
-	retries := 0
+	retries := 1
 	for forwardErr != nil && retries < MAX_RETRIES && canRetry {
 		host.mu.Lock()
 		host.healthy = false
@@ -107,7 +118,6 @@ func requestHandler(w http.ResponseWriter, req *http.Request) {
 
 	if forwardErr != nil {
 		w.WriteHeader(http.StatusBadGateway)
-		w.Write(nil)
 		return
 	}
 
