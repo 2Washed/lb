@@ -4,10 +4,11 @@
   "maxRetries": 3,
   "servers": [
     {
-      "url": "localhost:9001"
+      "url": "localhost:9001",
+      "weight": 3
     },
     {
-      "url": "localhost:8082"
+      "url": "localhost:9000"
     }
   ]
 }

@@ -12,7 +12,8 @@ const CONFIG_FILE_ENV = "LB_CONFIG"
 const DEFAULT_CONFIG_FILE = "config.json"
 
 type ServerConfiguration struct {
-	Url string `json:"url"`
+	Url    string `json:"url"`
+	Weight int    `json:"weight"`
 }
 
 type Configuration struct {
@@ -74,11 +75,14 @@ func (c *Configuration) validate() error {
 	if len(c.Servers) == 0 {
 		return fmt.Errorf("no servers defined in config")
 	}
+
 	if c.Port == 0 {
 		return fmt.Errorf("port is required")
 	}
+
 	if c.MaxRetries < 0 {
 		return fmt.Errorf("maxRetries cannot be negative")
 	}
+
 	return nil
 }

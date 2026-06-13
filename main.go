@@ -13,6 +13,7 @@ import (
 
 type Server struct {
 	url     string
+	weight  int
 	healthy bool
 	mu      sync.RWMutex
 }
@@ -137,6 +138,7 @@ func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) 
 }
 
 func forwardRequest(req *http.Request, host string) (*http.Response, error) {
+	log.Printf("[INFO] Forwarding to %s\n", host)
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
@@ -163,9 +165,21 @@ func getServer() (*Server, error) {
 		return nil, fmt.Errorf("no healthy servers available")
 	}
 
-	idx := i.Add(1)
-	serverIndex := int(idx) % len(servers)
-	return servers[serverIndex], nil
+	totalWeight := 0
+	for _, s := range servers {
+		totalWeight += s.weight
+	}
+
+	position := int(i.Add(1)-1) % totalWeight
+
+	for _, s := range servers {
+		position -= s.weight
+		if position < 0 {
+			return s, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no healthy servers available")
 }
 
 func updateServerHealth(server *Server) {
@@ -186,7 +200,13 @@ func isServerHealthy(server *Server) bool {
 }
 
 func mapServerConfigToServer(serverConfig *ServerConfiguration) *Server {
+	weight := 1
+	if serverConfig.Weight > 1 {
+		weight = serverConfig.Weight
+	}
+
 	return &Server{
-		url: serverConfig.Url,
+		url:    serverConfig.Url,
+		weight: weight,
 	}
 }
