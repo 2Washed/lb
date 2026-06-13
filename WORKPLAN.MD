@@ -37,3 +37,9 @@
 - Retry another healthy backend
 - Configure maximum retry attempts
 ```
+
+## Version 4
+- A load balancer that supports configuration files
+```
+- Use json or yaml to define load balancer configuration
+```
