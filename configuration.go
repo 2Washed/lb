@@ -12,7 +12,7 @@ const CONFIG_FILE_ENV = "LB_CONFIG"
 const DEFAULT_CONFIG_FILE = "config.json"
 
 type ServerConfiguration struct {
-	Url string `json:"ur"`
+	Url string `json:"url"`
 }
 
 type Configuration struct {
