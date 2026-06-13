@@ -1,0 +1,13 @@
+{
+  "port": 8080,
+  "healthCheckInterval": "10s",
+  "maxRetries": 3,
+  "servers": [
+    {
+      "url": "localhost:9001"
+    },
+    {
+      "url": "localhost:8082"
+    }
+  ]
+}

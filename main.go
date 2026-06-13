@@ -17,26 +17,22 @@ type Server struct {
 	mu      sync.RWMutex
 }
 
-var servers = []*Server{
-	{
-		url: "127.0.0.1:9000",
-	},
-	{
-		url: "127.0.0.1:9001",
-	},
-	{
-		url: "127.0.0.1:9002",
-	},
-}
+var servers []*Server
 
 var healthyServers atomic.Value
 var i atomic.Int64
-var rebuildMy sync.Mutex
-
-const HEALTH_CHECK_DURATION_SECONDS = 10
-const MAX_RETRIES = 3
+var rebuildMu sync.Mutex
 
 func main() {
+	configuration := getConfiguration()
+	port := configuration.Port
+	healthCheckDuration := configuration.HealthCheckInterval.Duration
+	maxRetries := configuration.MaxRetries
+	servers = make([]*Server, 0, len(configuration.Servers))
+	for _, serverConfig := range configuration.Servers {
+		servers = append(servers, mapServerConfigToServer(&serverConfig))
+	}
+
 	for _, server := range servers {
 		updateServerHealth(server)
 	}
@@ -55,21 +51,22 @@ func main() {
 			healthCheckWg.Wait()
 			rebuildHealthyServers()
 
-			time.Sleep(HEALTH_CHECK_DURATION_SECONDS * time.Second)
+			time.Sleep(healthCheckDuration)
 		}
 	}()
 
-	http.HandleFunc("/", requestHandler)
-	http.ListenAndServe(":8080", nil)
+	http.HandleFunc("/", newRequestHandler(maxRetries))
+	log.Printf("[INFO] Starting server on port: %v\n", port)
+	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 }
 
 func rebuildHealthyServers() {
 	// Suppose we have N requests going to the same server and they fail, each request will call this method which will result in N updates to healthyServers
 	// Added lock so that only 1 request gets to update healthy servers, while the others will proceed to retry (which can fail if we land on the server actively being marked as unhealthy)
-	if !rebuildMy.TryLock() {
+	if !rebuildMu.TryLock() {
 		return
 	}
-	defer rebuildMy.Unlock()
+	defer rebuildMu.Unlock()
 
 	okServers := filter(servers, func(server *Server) bool {
 		server.mu.RLock()
@@ -80,60 +77,62 @@ func rebuildHealthyServers() {
 	healthyServers.Store(okServers)
 
 }
-
-func requestHandler(w http.ResponseWriter, req *http.Request) {
-	host, noServerErr := getServer()
-	if noServerErr != nil {
-		log.Printf("[ERROR] %v\n", noServerErr)
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
-
-	canRetry := false
-	switch req.Method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		canRetry = true
-	}
-
-	res, forwardErr := forwardRequest(req, host.url)
-	retries := 1
-	for forwardErr != nil && retries < MAX_RETRIES && canRetry {
-		host.mu.Lock()
-		host.healthy = false
-		host.mu.Unlock()
-		rebuildHealthyServers()
-
-		log.Println("RETRYING")
-
-		host, noServerErr = getServer()
+func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		log.Printf("[INFO] New %v request from %v \n", req.Method, req.RemoteAddr)
+		host, noServerErr := getServer()
 		if noServerErr != nil {
 			log.Printf("[ERROR] %v\n", noServerErr)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 
-		res, forwardErr = forwardRequest(req, host.url)
-		retries++
-	}
-
-	if forwardErr != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		return
-	}
-
-	defer res.Body.Close()
-
-	for headerName, headerValues := range res.Header {
-		for _, v := range headerValues {
-			w.Header().Add(headerName, v)
+		canRetry := false
+		switch req.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			canRetry = true
 		}
-	}
-	w.WriteHeader(res.StatusCode)
 
-	_, copyErr := io.Copy(w, res.Body)
-	if copyErr != nil {
-		log.Printf("[ERROR] Copying request to client failed, Error: %v\n", copyErr)
-		return
+		res, forwardErr := forwardRequest(req, host.url)
+		retries := 1
+		for forwardErr != nil && retries < maxRetries && canRetry {
+			host.mu.Lock()
+			host.healthy = false
+			host.mu.Unlock()
+			rebuildHealthyServers()
+
+			log.Println("RETRYING")
+
+			host, noServerErr = getServer()
+			if noServerErr != nil {
+				log.Printf("[ERROR] %v\n", noServerErr)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+
+			res, forwardErr = forwardRequest(req, host.url)
+			retries++
+		}
+
+		if forwardErr != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+
+		defer res.Body.Close()
+
+		for headerName, headerValues := range res.Header {
+			for _, v := range headerValues {
+				w.Header().Add(headerName, v)
+			}
+		}
+		w.WriteHeader(res.StatusCode)
+
+		_, copyErr := io.Copy(w, res.Body)
+		if copyErr != nil {
+			log.Printf("[ERROR] Copying request to client failed, Error: %v\n", copyErr)
+			return
+		}
 	}
 }
 
@@ -184,4 +183,10 @@ func isServerHealthy(server *Server) bool {
 
 	defer conn.Close()
 	return true
+}
+
+func mapServerConfigToServer(serverConfig *ServerConfiguration) *Server {
+	return &Server{
+		url: serverConfig.Url,
+	}
 }
