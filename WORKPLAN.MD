@@ -41,5 +41,12 @@
 ## Version 4
 - A load balancer that supports configuration files
 ```
-- Use json or yaml to define load balancer configuration
+- Use json or yaml to define load balancer configuration (opted to use json since it's already in the standard lib)
+```
+
+## Version 5
+- A load balancer that supports weighted round robin
+```
+- Add a weight field and take it into consideration when picking a server from the list
+- If no weight is specified in the configuration file, default to 1 (normal round robin)
 ```
