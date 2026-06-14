@@ -12,10 +12,13 @@ import (
 )
 
 type Server struct {
-	url     string
-	weight  int
-	healthy bool
-	mu      sync.RWMutex
+	url                    string
+	weight                 int
+	healthy                bool
+	errorCount             atomic.Int64
+	requestCount           atomic.Int64
+	activeConnectionsCount atomic.Int64
+	mu                     sync.RWMutex
 }
 
 var servers []*Server
@@ -56,7 +59,7 @@ func main() {
 		}
 	}()
 
-	http.HandleFunc("/", newRequestHandler(maxRetries))
+	http.HandleFunc("/", newForwardRequestHandler(maxRetries))
 	log.Printf("[INFO] Starting server on port: %v\n", port)
 	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 }
@@ -78,7 +81,8 @@ func rebuildHealthyServers() {
 	healthyServers.Store(okServers)
 
 }
-func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) {
+
+func newForwardRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		log.Printf("[INFO] New %v request from %v \n", req.Method, req.RemoteAddr)
 		host, noServerErr := getServer()
@@ -94,7 +98,7 @@ func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) 
 			canRetry = true
 		}
 
-		res, forwardErr := forwardRequest(req, host.url)
+		res, forwardErr := forwardRequest(req, host)
 		retries := 1
 		for forwardErr != nil && retries < maxRetries && canRetry {
 			host.mu.Lock()
@@ -111,7 +115,7 @@ func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) 
 				return
 			}
 
-			res, forwardErr = forwardRequest(req, host.url)
+			res, forwardErr = forwardRequest(req, host)
 			retries++
 		}
 
@@ -137,20 +141,30 @@ func newRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) 
 	}
 }
 
-func forwardRequest(req *http.Request, host string) (*http.Response, error) {
-	log.Printf("[INFO] Forwarding to %s\n", host)
+func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
+	log.Printf("[INFO] Forwarding to %s\n", host.url)
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
-	outReq.URL.Host = host
-	outReq.Host = host
+	outReq.URL.Host = host.url
+	outReq.Host = host.url
+
+	host.activeConnectionsCount.Add(1)
+	defer host.activeConnectionsCount.Add(-1)
+	host.requestCount.Add(1)
 
 	res, forwardErr := http.DefaultClient.Do(outReq)
 	if forwardErr != nil {
+		host.errorCount.Add(1)
 		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
 		return nil, fmt.Errorf("forwarding request to host: %s failed", host)
 	}
 
+	if res.StatusCode >= 500 || res.StatusCode <= 599 {
+		host.errorCount.Add(1)
+	}
+
+	fmt.Printf("data: %+v\n", host)
 	return res, nil
 }
 
@@ -201,7 +215,7 @@ func isServerHealthy(server *Server) bool {
 
 func mapServerConfigToServer(serverConfig *ServerConfiguration) *Server {
 	weight := 1
-	if serverConfig.Weight > 1 {
+	if serverConfig.Weight > 0 {
 		weight = serverConfig.Weight
 	}
 
