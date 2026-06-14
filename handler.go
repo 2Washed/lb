@@ -26,11 +26,10 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 		return nil, fmt.Errorf("forwarding request to host: %s failed", host)
 	}
 
-	if res.StatusCode >= 500 || res.StatusCode <= 599 {
+	if res.StatusCode >= 500 && res.StatusCode <= 599 {
 		host.errorCount.Add(1)
 	}
 
-	fmt.Printf("data: %+v\n", host)
 	return res, nil
 }
 

@@ -31,6 +31,7 @@ func main() {
 
 	go updateHealthyServers(healthCheckDuration)
 
+	http.HandleFunc("/metrics", metricsRequestHandler)
 	http.HandleFunc("/", newForwardRequestHandler(maxRetries))
 	log.Printf("[INFO] Starting server on port: %v\n", port)
 	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
