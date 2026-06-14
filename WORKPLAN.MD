@@ -50,3 +50,16 @@
 - Add a weight field and take it into consideration when picking a server from the list
 - If no weight is specified in the configuration file, default to 1 (normal round robin)
 ```
+
+## Version 6
+- A load balancer that keeps track of server metrics
+```
+Metrics to keep track of:
+- errors
+- requests served
+- active connections
+
+Load balancer metrics:
+- uptime
+- total requests
+```
