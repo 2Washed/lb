@@ -63,3 +63,9 @@ Load balancer metrics:
 - uptime
 - total requests
 ```
+
+## Version 6
+- A load balancer that supports per user/IP rate limiting
+```
+- use token bucket algorithm to allow bursts of requests (heavy refresh + other actions)
+```
