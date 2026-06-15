@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 )
 
@@ -23,7 +24,7 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	if forwardErr != nil {
 		host.errorCount.Add(1)
 		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
-		return nil, fmt.Errorf("forwarding request to host: %s failed", host)
+		return nil, fmt.Errorf("forwarding request to host: %s failed", host.url)
 	}
 
 	if res.StatusCode >= 500 && res.StatusCode <= 599 {
@@ -33,9 +34,25 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	return res, nil
 }
 
-func newForwardRequestHandler(maxRetries int) func(http.ResponseWriter, *http.Request) {
+func newForwardRequestHandler(maxRetries int, rateLimiter *RateLimiter) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		log.Printf("[INFO] New %v request from %v \n", req.Method, req.RemoteAddr)
+
+		if rateLimiter != nil {
+			ip, _, err := net.SplitHostPort(req.RemoteAddr)
+			if err != nil {
+				log.Printf("[ERROR] could not parse remote addr: %v\n", req.RemoteAddr)
+				ip = req.RemoteAddr
+			}
+
+			if rateLimitErr := rateLimiter.Hit(ip); rateLimitErr != nil {
+				log.Printf("[ERROR] %v\n", rateLimitErr)
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+		}
+
 		host, noServerErr := getServer()
 		if noServerErr != nil {
 			log.Printf("[ERROR] %v\n", noServerErr)

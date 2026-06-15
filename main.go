@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var servers []*Server
@@ -21,7 +22,23 @@ func main() {
 	maxRetries := configuration.MaxRetries
 	servers = make([]*Server, 0, len(configuration.Servers))
 	for _, serverConfig := range configuration.Servers {
-		servers = append(servers, mapServerConfigToServer(&serverConfig))
+		servers = append(servers, mapServerConfigToServer(serverConfig))
+	}
+
+	var rateLimiter *RateLimiter
+	if configuration.RateLimiter != nil {
+		rateLimiter = NewRateLimiter(
+			configuration.RateLimiter.Rate,
+			configuration.RateLimiter.BurstSeconds,
+			configuration.RateLimiter.TtlSeconds,
+		)
+
+		go func() {
+			for {
+				time.Sleep(time.Duration(configuration.RateLimiter.TtlSeconds))
+				rateLimiter.PurgeStale()
+			}
+		}()
 	}
 
 	for _, server := range servers {
@@ -32,7 +49,7 @@ func main() {
 	go updateHealthyServers(healthCheckDuration)
 
 	http.HandleFunc("/metrics", metricsRequestHandler)
-	http.HandleFunc("/", newForwardRequestHandler(maxRetries))
+	http.HandleFunc("/", newForwardRequestHandler(maxRetries, rateLimiter))
 	log.Printf("[INFO] Starting server on port: %v\n", port)
 	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 }

@@ -16,11 +16,18 @@ type ServerConfiguration struct {
 	Weight int    `json:"weight"`
 }
 
+type RateLimiterConfig struct {
+	Rate         int `json:"rate"`
+	BurstSeconds int `json:"burstSeconds"`
+	TtlSeconds   int `json:"ttlSeconds"`
+}
+
 type Configuration struct {
-	Port                uint16                `json:"port"`
-	HealthCheckInterval Duration              `json:"healthCheckInterval"`
-	MaxRetries          int                   `json:"maxRetries"`
-	Servers             []ServerConfiguration `json:"servers"`
+	Port                uint16                 `json:"port"`
+	HealthCheckInterval Duration               `json:"healthCheckInterval"`
+	MaxRetries          int                    `json:"maxRetries"`
+	Servers             []*ServerConfiguration `json:"servers"`
+	RateLimiter         *RateLimiterConfig     `json:"rateLimiter"`
 }
 
 type Duration struct {

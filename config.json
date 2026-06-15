@@ -10,5 +10,10 @@
     {
       "url": "localhost:9000"
     }
-  ]
+  ],
+  "rateLimiter": {
+    "rate": 0,
+    "burstSeconds": 0,
+    "ttlSeconds": 10
+  }
 }
