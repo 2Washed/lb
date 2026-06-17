@@ -17,9 +17,9 @@ type ServerConfiguration struct {
 }
 
 type RateLimiterConfig struct {
-	Rate         int `json:"rate"`
-	BurstSeconds int `json:"burstSeconds"`
-	TtlSeconds   int `json:"ttlSeconds"`
+	Rate         int      `json:"rate"`
+	BurstSeconds int      `json:"burstSeconds"`
+	Expiry       Duration `json:"expiry"`
 }
 
 type Configuration struct {
@@ -28,10 +28,28 @@ type Configuration struct {
 	MaxRetries          int                    `json:"maxRetries"`
 	Servers             []*ServerConfiguration `json:"servers"`
 	RateLimiter         *RateLimiterConfig     `json:"rateLimiter"`
+	BalancingAlgorithm  BalancingAlgorithm     `json:"balancer"` //this will default to 0 => round robin
 }
 
 type Duration struct {
 	time.Duration
+}
+
+type BalancingAlgorithm int
+
+const (
+	RoundRobinAlgo BalancingAlgorithm = iota //TODO remove 'Algo from the name after moving to separate packages'
+	LeastConnectionsAlgo
+)
+
+var stringToAlgo = map[string]BalancingAlgorithm{
+	"round-robin":       RoundRobinAlgo,
+	"least-connections": LeastConnectionsAlgo,
+}
+
+var algoToString = map[BalancingAlgorithm]string{
+	RoundRobinAlgo:       "round-robin",
+	LeastConnectionsAlgo: "least-connections",
 }
 
 func (d *Duration) UnmarshalJSON(b []byte) error {
@@ -46,6 +64,21 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 
 	d.Duration = duration
+	return nil
+}
+
+func (algo *BalancingAlgorithm) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	algorithm, ok := stringToAlgo[s]
+	if !ok {
+		return fmt.Errorf("invalid balancing algorithm: %s", s)
+	}
+
+	*algo = algorithm
 	return nil
 }
 

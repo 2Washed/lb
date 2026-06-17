@@ -43,8 +43,9 @@ func TestTokenBucket_tryAllow_should_update_token_count(t *testing.T) {
 }
 
 func TestRateLimiter_Hit_should_return_err_if_rate_limit_reached(t *testing.T) {
-	rate, burstSeconds, ttlSeconds := 10, 1, 40
-	rateLimiter := NewRateLimiter(rate, burstSeconds, ttlSeconds)
+	rate, burstSeconds := 10, 1
+	expiry, _ := time.ParseDuration("10s")
+	rateLimiter := NewRateLimiter(rate, burstSeconds, expiry)
 	userId := "user"
 
 	for i := 0; i < rate; i++ {
@@ -63,8 +64,9 @@ func TestRateLimiter_Hit_should_return_err_if_rate_limit_reached(t *testing.T) {
 }
 
 func TestRateLimiter_Hit_concurrency(t *testing.T) {
-	rate, burstSeconds, ttlSeconds := 100, 1, 40
-	rateLimiter := NewRateLimiter(rate, burstSeconds, ttlSeconds)
+	rate, burstSeconds := 100, 1
+	expiry, _ := time.ParseDuration("10s")
+	rateLimiter := NewRateLimiter(rate, burstSeconds, expiry)
 
 	var wg sync.WaitGroup
 	var allowed atomic.Int32

@@ -13,7 +13,7 @@ type RateLimiter struct {
 	buckets      map[identifier]*TokenBucket
 	rate         int
 	burstSeconds int
-	ttlSeconds   int
+	expiry       time.Duration
 	mu           sync.RWMutex
 }
 
@@ -92,11 +92,18 @@ func (r *RateLimiter) getOrCreateBucket(id identifier) *TokenBucket {
 	return bucket
 }
 
-func NewRateLimiter(rate int, burstSeconds int, ttlSeconds int) *RateLimiter {
-	return &RateLimiter{
+func NewRateLimiter(rate int, burstSeconds int, expiry time.Duration) *RateLimiter {
+	rateLimiter := &RateLimiter{
 		buckets:      make(map[identifier]*TokenBucket),
 		rate:         rate,
 		burstSeconds: burstSeconds,
-		ttlSeconds:   ttlSeconds,
+		expiry:       expiry,
 	}
+	go func() {
+		for {
+			time.Sleep(rateLimiter.expiry)
+			rateLimiter.PurgeStale()
+		}
+	}()
+	return rateLimiter
 }

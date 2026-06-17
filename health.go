@@ -8,6 +8,7 @@ import (
 )
 
 var healthyServers atomic.Value
+var rebuildMu sync.Mutex
 
 func updateHealthyServers(healthCheckDuration time.Duration) {
 	for {

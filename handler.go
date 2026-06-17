@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 )
 
 func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
@@ -20,7 +21,8 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	defer host.activeConnectionsCount.Add(-1)
 	host.requestCount.Add(1)
 
-	res, forwardErr := http.DefaultClient.Do(outReq)
+	httpClient := &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
+	res, forwardErr := httpClient.Do(outReq)
 	if forwardErr != nil {
 		host.errorCount.Add(1)
 		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
@@ -34,7 +36,7 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	return res, nil
 }
 
-func newForwardRequestHandler(maxRetries int, rateLimiter *RateLimiter) func(http.ResponseWriter, *http.Request) {
+func newForwardRequestHandler(maxRetries int, balancer Balancer, rateLimiter *RateLimiter) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		log.Printf("[INFO] New %v request from %v \n", req.Method, req.RemoteAddr)
 
@@ -46,14 +48,14 @@ func newForwardRequestHandler(maxRetries int, rateLimiter *RateLimiter) func(htt
 			}
 
 			if rateLimitErr := rateLimiter.Hit(ip); rateLimitErr != nil {
-				log.Printf("[ERROR] %v\n", rateLimitErr)
+				log.Printf("[WARN] %v\n", rateLimitErr)
 				w.Header().Set("Retry-After", "1")
 				w.WriteHeader(http.StatusTooManyRequests)
 				return
 			}
 		}
 
-		host, noServerErr := getServer()
+		host, noServerErr := getServer(balancer)
 		if noServerErr != nil {
 			log.Printf("[ERROR] %v\n", noServerErr)
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -69,6 +71,10 @@ func newForwardRequestHandler(maxRetries int, rateLimiter *RateLimiter) func(htt
 		res, forwardErr := forwardRequest(req, host)
 		retries := 1
 		for forwardErr != nil && retries < maxRetries && canRetry {
+			if res != nil {
+				res.Body.Close()
+			}
+
 			host.mu.Lock()
 			host.healthy = false
 			host.mu.Unlock()
@@ -76,7 +82,7 @@ func newForwardRequestHandler(maxRetries int, rateLimiter *RateLimiter) func(htt
 
 			log.Println("RETRYING")
 
-			host, noServerErr = getServer()
+			host, noServerErr = getServer(balancer)
 			if noServerErr != nil {
 				log.Printf("[ERROR] %v\n", noServerErr)
 				w.WriteHeader(http.StatusServiceUnavailable)

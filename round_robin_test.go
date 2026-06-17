@@ -6,9 +6,10 @@ import (
 )
 
 func TestRoundRobin_NoHealthyServer(t *testing.T) {
-	healthyServers.Store([]*Server{})
+	rb := RoundRobin{}
+	servers := []*Server{}
 
-	server, err := getServer()
+	server, err := rb.Next(servers)
 
 	if server != nil {
 		t.Error("expected server to be nil")
@@ -20,10 +21,11 @@ func TestRoundRobin_NoHealthyServer(t *testing.T) {
 }
 
 func TestRoundRobin_SingleServer(t *testing.T) {
-	healthyServer := &Server{url: "serverUrl", weight: 1, healthy: true}
-	healthyServers.Store([]*Server{healthyServer})
+	rb := RoundRobin{}
+	healthyServer := newTestServer("s1", 1, true)
+	servers := []*Server{healthyServer}
 
-	server, err := getServer()
+	server, err := rb.Next(servers)
 
 	if server != healthyServer {
 		t.Errorf("expected %s got %s", healthyServer.url, server.url)
@@ -35,10 +37,11 @@ func TestRoundRobin_SingleServer(t *testing.T) {
 }
 
 func TestRoundRobin_multiple_servers(t *testing.T) {
+	rb := RoundRobin{}
 	s1 := newTestServer("s1", 1, true)
 	s2 := newTestServer("s2", 1, true)
 
-	healthyServers.Store([]*Server{s1, s2})
+	servers := []*Server{s1, s2}
 
 	expected := []*Server{
 		s1, s2, s1, s2, s1, s2,
@@ -46,7 +49,7 @@ func TestRoundRobin_multiple_servers(t *testing.T) {
 	callCount := len(expected)
 
 	for i := 0; i < callCount; i++ {
-		got, err := getServer()
+		got, err := rb.Next(servers)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -58,11 +61,12 @@ func TestRoundRobin_multiple_servers(t *testing.T) {
 }
 
 func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
+	rb := RoundRobin{}
 	s1 := newTestServer("s1", 3, true)
 	s2 := newTestServer("s2", 1, true)
 	s3 := newTestServer("s3", 2, true)
 
-	healthyServers.Store([]*Server{s1, s2, s3})
+	servers := []*Server{s1, s2, s3}
 
 	expected := []*Server{
 		s1, s1, s1, s2, s3, s3, s1,
@@ -70,7 +74,7 @@ func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
 	callCount := len(expected)
 
 	for i := 0; i < callCount; i++ {
-		got, err := getServer()
+		got, err := rb.Next(servers)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -82,11 +86,12 @@ func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
 }
 
 func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
+	rb := RoundRobin{}
 	s1 := newTestServer("s1", 3, true)
 	s2 := newTestServer("s2", 1, true)
 	s3 := newTestServer("s3", 2, true)
 
-	healthyServers.Store([]*Server{s1, s2, s3})
+	servers := []*Server{s1, s2, s3}
 
 	const requestCount = 10_000
 	count := map[string]int{}
@@ -99,7 +104,7 @@ func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			s, err := getServer()
+			s, err := rb.Next(servers)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return

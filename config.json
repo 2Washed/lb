@@ -4,16 +4,20 @@
   "maxRetries": 3,
   "servers": [
     {
-      "url": "localhost:9001",
+      "url": "localhost:9000",
       "weight": 3
     },
     {
-      "url": "localhost:9000"
+      "url": "localhost:9001"
+    },
+    {
+      "url": "localhost:9002"
     }
   ],
   "rateLimiter": {
-    "rate": 0,
-    "burstSeconds": 0,
-    "ttlSeconds": 10
-  }
+    "rate": 200,
+    "burstSeconds": 2,
+    "expiry": "10s"
+  },
+  "balancer": "least-connections"
 }

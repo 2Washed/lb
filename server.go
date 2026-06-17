@@ -16,32 +16,14 @@ type Server struct {
 	mu                     sync.RWMutex
 }
 
-func getServer() (*Server, error) {
+func getServer(balancer Balancer) (*Server, error) {
 	raw := healthyServers.Load()
 	if raw == nil {
 		return nil, fmt.Errorf("no healthy servers available")
 	}
 
 	servers := raw.([]*Server)
-	if len(servers) == 0 {
-		return nil, fmt.Errorf("no healthy servers available")
-	}
-
-	totalWeight := 0
-	for _, s := range servers {
-		totalWeight += s.weight
-	}
-
-	position := int(i.Add(1)-1) % totalWeight
-
-	for _, s := range servers {
-		position -= s.weight
-		if position < 0 {
-			return s, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no healthy servers available")
+	return balancer.Next(servers)
 }
 
 func updateServerHealth(server *Server) {
