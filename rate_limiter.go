@@ -24,7 +24,7 @@ type TokenBucket struct {
 	mu         sync.Mutex
 }
 
-func (tb *TokenBucket) Allow(rate int) error {
+func (tb *TokenBucket) TryAllow(rate int) error {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -47,9 +47,9 @@ func (tb *TokenBucket) Allow(rate int) error {
 
 func (r *RateLimiter) Hit(id identifier) error {
 	bucket := r.getOrCreateBucket(id)
-	err := bucket.Allow(r.rate)
+	err := bucket.TryAllow(r.rate)
 	if err != nil {
-		return fmt.Errorf("rate limit reached for %s: %w", id, err)
+		return fmt.Errorf("rate limit reached for %s: %v", id, err)
 	}
 	return nil
 }
