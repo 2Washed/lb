@@ -78,3 +78,6 @@ Load balancer metrics:
 
 ## Version 8
 - Use middleware based approach
+
+## Rework time
+- Before adding any new features (TLS), I first need to rework the structure of the application and add some tests, gotta do things properly :) 
