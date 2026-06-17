@@ -75,3 +75,6 @@ Load balancer metrics:
 ```
 - turn the server selection into an interface and use strategy patter to pick either round robin or least connection
 ```
+
+## Version 8
+- Use middleware based approach
