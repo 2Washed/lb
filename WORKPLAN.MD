@@ -69,3 +69,9 @@ Load balancer metrics:
 ```
 - use token bucket algorithm to allow bursts of requests (heavy refresh + other actions)
 ```
+
+## Version 7
+- Add least connection algorithm support
+```
+- turn the server selection into an interface and use strategy patter to pick either round robin or least connection
+```
