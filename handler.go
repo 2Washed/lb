@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
+	"log/slog"
 	"net/http"
 	"time"
 )
 
+var httpClient = &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
+
 func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
-	log.Printf("[INFO] Forwarding to %s\n", host.url)
+	slog.Info("forwarting request", "to", host.url)
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
@@ -21,11 +23,10 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	defer host.activeConnectionsCount.Add(-1)
 	host.requestCount.Add(1)
 
-	httpClient := &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
 	res, forwardErr := httpClient.Do(outReq)
 	if forwardErr != nil {
 		host.errorCount.Add(1)
-		log.Printf("[ERROR] Forwarding request failed, Error: %v\n", forwardErr)
+		slog.Error("forwarding request failed", "error", forwardErr)
 		return nil, fmt.Errorf("forwarding request to host: %s failed", host.url)
 	}
 
@@ -36,28 +37,11 @@ func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
 	return res, nil
 }
 
-func newForwardRequestHandler(maxRetries int, balancer Balancer, rateLimiter *RateLimiter) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, req *http.Request) {
-		log.Printf("[INFO] New %v request from %v \n", req.Method, req.RemoteAddr)
-
-		if rateLimiter != nil {
-			ip, _, err := net.SplitHostPort(req.RemoteAddr)
-			if err != nil {
-				log.Printf("[ERROR] could not parse remote addr: %v\n", req.RemoteAddr)
-				ip = req.RemoteAddr
-			}
-
-			if rateLimitErr := rateLimiter.Hit(ip); rateLimitErr != nil {
-				log.Printf("[WARN] %v\n", rateLimitErr)
-				w.Header().Set("Retry-After", "1")
-				w.WriteHeader(http.StatusTooManyRequests)
-				return
-			}
-		}
-
+func newForwardRequestHandler(maxRetries int, balancer Balancer) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		host, noServerErr := getServer(balancer)
 		if noServerErr != nil {
-			log.Printf("[ERROR] %v\n", noServerErr)
+			slog.Error("no healthy servers")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -79,8 +63,6 @@ func newForwardRequestHandler(maxRetries int, balancer Balancer, rateLimiter *Ra
 			host.healthy = false
 			host.mu.Unlock()
 			rebuildHealthyServers()
-
-			log.Println("RETRYING")
 
 			host, noServerErr = getServer(balancer)
 			if noServerErr != nil {
@@ -109,8 +91,8 @@ func newForwardRequestHandler(maxRetries int, balancer Balancer, rateLimiter *Ra
 
 		_, copyErr := io.Copy(w, res.Body)
 		if copyErr != nil {
-			log.Printf("[ERROR] Copying request to client failed, Error: %v\n", copyErr)
+			slog.Error("copying request failed", "error", copyErr)
 			return
 		}
-	}
+	})
 }

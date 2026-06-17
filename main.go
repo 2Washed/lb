@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -12,16 +12,12 @@ func main() {
 	configuration := getConfiguration()
 
 	port := configuration.Port
-	log.Printf("using port: %d\n", port)
 	healthCheckDuration := configuration.HealthCheckInterval.Duration
 	maxRetries := configuration.MaxRetries
 	servers = make([]*Server, 0, len(configuration.Servers))
 	for _, serverConfig := range configuration.Servers {
-		log.Printf("adding server: %v\n", serverConfig)
 		servers = append(servers, mapServerConfigToServer(serverConfig))
 	}
-
-	log.Printf("using algorithm: %s\n", algoToString[configuration.BalancingAlgorithm])
 	balancer := balancingAlgoToBalancer(configuration.BalancingAlgorithm)
 
 	var rateLimiter *RateLimiter
@@ -41,8 +37,16 @@ func main() {
 	go updateHealthyServers(healthCheckDuration)
 
 	http.HandleFunc("/metrics", metricsRequestHandler)
-	http.HandleFunc("/", newForwardRequestHandler(maxRetries, balancer, rateLimiter))
-	log.Printf("[INFO] Starting server on port: %v\n", port)
+
+	handler := Chain(
+		newForwardRequestHandler(maxRetries, balancer),
+		WithRateLimiter(rateLimiter),
+		WithLogging(),
+		WithRequestID(),
+		WithRecover(),
+	)
+	http.Handle("/", handler)
+	slog.Info("starting server", "port", port, "healthCheckDuration", healthCheckDuration, "maxRetries", maxRetries, "balancer", algoToString[configuration.BalancingAlgorithm])
 	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 }
 
