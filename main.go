@@ -53,8 +53,20 @@ func main() {
 		middleware.WithRecover(),
 	)
 	http.Handle("/", handler)
-	slog.Info("starting server", "port", port, "healthCheckDuration", healthCheckDuration, "maxRetries", maxRetries, "balancer", config.AlgoToString[configuration.BalancingAlgorithm])
-	slog.Error("error while starting server", "err", http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
+
+	slog.Info(
+		"starting server",
+		"port", port,
+		"healthCheckDuration", healthCheckDuration,
+		"maxRetries", maxRetries,
+		"balancer", config.GetBalancingAlgorithmName(configuration.BalancingAlgorithm),
+	)
+
+	err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+
+	if err != nil {
+		slog.Error("error while starting server", "err", err)
+	}
 }
 
 func mapServerConfigToServer(serverConfig *config.ServerConfiguration) *server.Server {
