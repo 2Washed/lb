@@ -1,13 +1,15 @@
-package main
+package test
 
 import (
+	"lb/internal/balancer"
+	"lb/internal/server"
 	"sync"
 	"testing"
 )
 
 func TestRoundRobin_NoHealthyServer(t *testing.T) {
-	rb := RoundRobin{}
-	servers := []*Server{}
+	rb := balancer.RoundRobin{}
+	servers := []*server.Server{}
 
 	server, err := rb.Next(servers)
 
@@ -21,14 +23,14 @@ func TestRoundRobin_NoHealthyServer(t *testing.T) {
 }
 
 func TestRoundRobin_SingleServer(t *testing.T) {
-	rb := RoundRobin{}
+	rb := balancer.RoundRobin{}
 	healthyServer := newTestServer("s1", 1, true)
-	servers := []*Server{healthyServer}
+	servers := []*server.Server{healthyServer}
 
 	server, err := rb.Next(servers)
 
 	if server != healthyServer {
-		t.Errorf("expected %s got %s", healthyServer.url, server.url)
+		t.Errorf("expected %s got %s", healthyServer.Url, server.Url)
 	}
 
 	if err != nil {
@@ -37,13 +39,13 @@ func TestRoundRobin_SingleServer(t *testing.T) {
 }
 
 func TestRoundRobin_multiple_servers(t *testing.T) {
-	rb := RoundRobin{}
+	rb := balancer.RoundRobin{}
 	s1 := newTestServer("s1", 1, true)
 	s2 := newTestServer("s2", 1, true)
 
-	servers := []*Server{s1, s2}
+	servers := []*server.Server{s1, s2}
 
-	expected := []*Server{
+	expected := []*server.Server{
 		s1, s2, s1, s2, s1, s2,
 	}
 	callCount := len(expected)
@@ -55,20 +57,20 @@ func TestRoundRobin_multiple_servers(t *testing.T) {
 		}
 		want := expected[i]
 		if got != want {
-			t.Errorf("call %d, expected %s got %s", i+1, want.url, got.url)
+			t.Errorf("call %d, expected %s got %s", i+1, want.Url, got.Url)
 		}
 	}
 }
 
 func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
-	rb := RoundRobin{}
+	rb := balancer.RoundRobin{}
 	s1 := newTestServer("s1", 3, true)
 	s2 := newTestServer("s2", 1, true)
 	s3 := newTestServer("s3", 2, true)
 
-	servers := []*Server{s1, s2, s3}
+	servers := []*server.Server{s1, s2, s3}
 
-	expected := []*Server{
+	expected := []*server.Server{
 		s1, s1, s1, s2, s3, s3, s1,
 	}
 	callCount := len(expected)
@@ -80,18 +82,18 @@ func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
 		}
 		want := expected[i]
 		if got != want {
-			t.Errorf("call %d, expected %s got %s", i+1, want.url, got.url)
+			t.Errorf("call %d, expected %s got %s", i+1, want.Url, got.Url)
 		}
 	}
 }
 
 func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
-	rb := RoundRobin{}
+	rb := balancer.RoundRobin{}
 	s1 := newTestServer("s1", 3, true)
 	s2 := newTestServer("s2", 1, true)
 	s3 := newTestServer("s3", 2, true)
 
-	servers := []*Server{s1, s2, s3}
+	servers := []*server.Server{s1, s2, s3}
 
 	const requestCount = 10_000
 	count := map[string]int{}
@@ -111,22 +113,22 @@ func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
 			}
 
 			mu.Lock()
-			count[s.url]++
+			count[s.Url]++
 			mu.Unlock()
 		}()
 	}
 
 	wg.Wait()
 
-	if count[s1.url] > int(requestCount*.505) || count[s2.url] > int(requestCount*.167) || count[s3.url] > int(requestCount*.334) {
+	if count[s1.Url] > int(requestCount*.505) || count[s2.Url] > int(requestCount*.167) || count[s3.Url] > int(requestCount*.334) {
 		t.Errorf("unexpected distribution: %+v", count)
 	}
 }
 
-func newTestServer(url string, weight int, healthy bool) *Server {
-	return &Server{
-		url:     url,
-		weight:  weight,
-		healthy: healthy,
+func newTestServer(url string, weight int, healthy bool) *server.Server {
+	return &server.Server{
+		Url:     url,
+		Weight:  weight,
+		Healthy: healthy,
 	}
 }

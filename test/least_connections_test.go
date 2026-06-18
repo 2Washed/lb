@@ -1,12 +1,14 @@
-package main
+package test
 
 import (
+	"lb/internal/balancer"
+	"lb/internal/server"
 	"testing"
 )
 
 func TestLC_NoHealthyServer(t *testing.T) {
-	rb := LeastConnections{}
-	servers := []*Server{}
+	rb := balancer.LeastConnections{}
+	servers := []*server.Server{}
 
 	server, err := rb.Next(servers)
 
@@ -20,14 +22,14 @@ func TestLC_NoHealthyServer(t *testing.T) {
 }
 
 func TestLC_SingleServer(t *testing.T) {
-	rb := LeastConnections{}
+	rb := balancer.LeastConnections{}
 	healthyServer := newTestServer("s1", 1, true)
-	servers := []*Server{healthyServer}
+	servers := []*server.Server{healthyServer}
 
 	server, err := rb.Next(servers)
 
 	if server != healthyServer {
-		t.Errorf("expected %s got %s", healthyServer.url, server.url)
+		t.Errorf("expected %s got %s", healthyServer.Url, server.Url)
 	}
 
 	if err != nil {
@@ -36,29 +38,29 @@ func TestLC_SingleServer(t *testing.T) {
 }
 
 func TestLC_multiple_servers(t *testing.T) {
-	rb := LeastConnections{}
+	rb := balancer.LeastConnections{}
 
 	s1 := newTestServer("s1", 1, true)
-	s1.activeConnectionsCount.Store(1)
+	s1.ActiveConnectionsCount.Store(1)
 	s2 := newTestServer("s2", 1, true)
-	s2.activeConnectionsCount.Store(2)
+	s2.ActiveConnectionsCount.Store(2)
 
-	servers := []*Server{s1, s2}
+	servers := []*server.Server{s1, s2}
 
-	expected := []*Server{
+	expected := []*server.Server{
 		s1, s1, s2, s1, s2, s1,
 	}
 	callCount := len(expected)
 
 	for i := 0; i < callCount; i++ {
 		got, err := rb.Next(servers)
-		got.activeConnectionsCount.Add(1)
+		got.ActiveConnectionsCount.Add(1)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 		want := expected[i]
 		if got != want {
-			t.Errorf("call %d, expected %s got %s", i+1, want.url, got.url)
+			t.Errorf("call %d, expected %s got %s", i+1, want.Url, got.Url)
 		}
 	}
 }

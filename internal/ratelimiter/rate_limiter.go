@@ -1,4 +1,4 @@
-package main
+package ratelimiter
 
 import (
 	"fmt"
@@ -18,30 +18,30 @@ type RateLimiter struct {
 }
 
 type TokenBucket struct {
-	tokens     float64
-	lastRefill time.Time
-	maxTokens  int
-	mu         sync.Mutex
+	Tokens     float64
+	LastRefill time.Time
+	MaxTokens  int
+	Mu         sync.Mutex
 }
 
 func (tb *TokenBucket) TryAllow(rate int) error {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+	tb.Mu.Lock()
+	defer tb.Mu.Unlock()
 
 	requestTime := time.Now()
-	lastRefill := tb.lastRefill
+	lastRefill := tb.LastRefill
 
 	elapsedSeconds := requestTime.Sub(lastRefill).Seconds()
 	tokensToAdd := elapsedSeconds * float64(rate)
 
-	tb.tokens = math.Min(float64(tb.maxTokens), tb.tokens+tokensToAdd)
-	tb.lastRefill = requestTime
+	tb.Tokens = math.Min(float64(tb.MaxTokens), tb.Tokens+tokensToAdd)
+	tb.LastRefill = requestTime
 
-	if tb.tokens < 1 {
+	if tb.Tokens < 1 {
 		return fmt.Errorf("insufficient tokens")
 	}
 
-	tb.tokens -= 1
+	tb.Tokens -= 1
 	return nil
 }
 
@@ -59,11 +59,11 @@ func (r *RateLimiter) PurgeStale() {
 	defer r.mu.Unlock()
 
 	for id, bucket := range r.buckets {
-		bucket.mu.Lock()
-		if time.Since(bucket.lastRefill).Seconds() > 99 {
+		bucket.Mu.Lock()
+		if time.Since(bucket.LastRefill).Seconds() > 99 {
 			delete(r.buckets, id)
 		}
-		bucket.mu.Unlock()
+		bucket.Mu.Unlock()
 	}
 }
 
@@ -83,9 +83,9 @@ func (r *RateLimiter) getOrCreateBucket(id identifier) *TokenBucket {
 	}
 
 	bucket = &TokenBucket{
-		tokens:     float64(r.rate * r.burstSeconds),
-		lastRefill: time.Now(),
-		maxTokens:  r.rate * r.burstSeconds,
+		Tokens:     float64(r.rate * r.burstSeconds),
+		LastRefill: time.Now(),
+		MaxTokens:  r.rate * r.burstSeconds,
 	}
 
 	r.buckets[id] = bucket

@@ -1,8 +1,9 @@
-package main
+package middleware
 
 import (
 	"context"
 	"crypto/rand"
+	"lb/internal/ratelimiter"
 	"log/slog"
 	"net"
 	"net/http"
@@ -41,7 +42,14 @@ func WithLogging() Middleware {
 	}
 }
 
-func WithRateLimiter(rateLimiter *RateLimiter) Middleware {
+func WithRateLimiter(rateLimiter *ratelimiter.RateLimiter) Middleware {
+	if rateLimiter == nil {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r)
+			})
+		}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip, _, err := net.SplitHostPort(r.RemoteAddr)

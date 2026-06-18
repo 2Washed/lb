@@ -2,27 +2,34 @@ package main
 
 import (
 	"fmt"
+	"lb/internal/balancer"
+	"lb/internal/config"
+	"lb/internal/metrics"
+	"lb/internal/middleware"
+	"lb/internal/proxy"
+	"lb/internal/ratelimiter"
+	"lb/internal/server"
 	"log/slog"
 	"net/http"
 )
 
-var servers []*Server
+var servers []*server.Server
 
 func main() {
-	configuration := getConfiguration()
+	configuration := config.GetConfiguration()
 
 	port := configuration.Port
 	healthCheckDuration := configuration.HealthCheckInterval.Duration
 	maxRetries := configuration.MaxRetries
-	servers = make([]*Server, 0, len(configuration.Servers))
+	servers = make([]*server.Server, 0, len(configuration.Servers))
 	for _, serverConfig := range configuration.Servers {
 		servers = append(servers, mapServerConfigToServer(serverConfig))
 	}
 	balancer := balancingAlgoToBalancer(configuration.BalancingAlgorithm)
 
-	var rateLimiter *RateLimiter
+	var rl *ratelimiter.RateLimiter
 	if configuration.RateLimiter != nil {
-		rateLimiter = NewRateLimiter(
+		rl = ratelimiter.NewRateLimiter(
 			configuration.RateLimiter.Rate,
 			configuration.RateLimiter.BurstSeconds,
 			configuration.RateLimiter.Expiry.Duration,
@@ -30,44 +37,44 @@ func main() {
 	}
 
 	for _, server := range servers {
-		updateServerHealth(server)
+		proxy.UpdateServerHealth(server)
 	}
-	rebuildHealthyServers()
+	proxy.RebuildHealthyServers(servers)
 
-	go updateHealthyServers(healthCheckDuration)
+	go proxy.UpdateHealthyServers(servers, healthCheckDuration)
 
-	http.HandleFunc("/metrics", metricsRequestHandler)
+	http.HandleFunc("/metrics", metrics.NewMetricsRequestHandler(servers))
 
-	handler := Chain(
-		newForwardRequestHandler(maxRetries, balancer),
-		WithRateLimiter(rateLimiter),
-		WithLogging(),
-		WithRequestID(),
-		WithRecover(),
+	handler := middleware.Chain(
+		proxy.NewForwardRequestHandler(maxRetries, balancer, servers),
+		middleware.WithRateLimiter(rl),
+		middleware.WithLogging(),
+		middleware.WithRequestID(),
+		middleware.WithRecover(),
 	)
 	http.Handle("/", handler)
-	slog.Info("starting server", "port", port, "healthCheckDuration", healthCheckDuration, "maxRetries", maxRetries, "balancer", algoToString[configuration.BalancingAlgorithm])
-	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+	slog.Info("starting server", "port", port, "healthCheckDuration", healthCheckDuration, "maxRetries", maxRetries, "balancer", config.AlgoToString[configuration.BalancingAlgorithm])
+	slog.Error("error while starting server", "err", http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
 }
 
-func mapServerConfigToServer(serverConfig *ServerConfiguration) *Server {
+func mapServerConfigToServer(serverConfig *config.ServerConfiguration) *server.Server {
 	weight := 1
 	if serverConfig.Weight > 0 {
 		weight = serverConfig.Weight
 	}
 
-	return &Server{
-		url:    serverConfig.Url,
-		weight: weight,
+	return &server.Server{
+		Url:    serverConfig.Url,
+		Weight: weight,
 	}
 }
 
-func balancingAlgoToBalancer(algo BalancingAlgorithm) Balancer {
+func balancingAlgoToBalancer(algo config.BalancingAlgorithm) balancer.Balancer {
 	switch algo {
-	case RoundRobinAlgo:
-		return &RoundRobin{}
-	case LeastConnectionsAlgo:
-		return &LeastConnections{}
+	case config.RoundRobinAlgo:
+		return &balancer.RoundRobin{}
+	case config.LeastConnectionsAlgo:
+		return &balancer.LeastConnections{}
 	}
 
 	panic("unreachable")

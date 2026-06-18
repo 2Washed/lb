@@ -1,8 +1,10 @@
-package main
+package proxy
 
 import (
 	"fmt"
 	"io"
+	"lb/internal/balancer"
+	"lb/internal/server"
 	"log"
 	"log/slog"
 	"net/http"
@@ -11,33 +13,33 @@ import (
 
 var httpClient = &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
 
-func forwardRequest(req *http.Request, host *Server) (*http.Response, error) {
-	slog.Info("forwarting request", "to", host.url)
+func forwardRequest(req *http.Request, host *server.Server) (*http.Response, error) {
+	slog.Info("forwarding request", "to", host.Url)
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
 	outReq.RequestURI = ""
-	outReq.URL.Host = host.url
-	outReq.Host = host.url
+	outReq.URL.Host = host.Url
+	outReq.Host = host.Url
 
-	host.activeConnectionsCount.Add(1)
-	defer host.activeConnectionsCount.Add(-1)
-	host.requestCount.Add(1)
+	host.ActiveConnectionsCount.Add(1)
+	defer host.ActiveConnectionsCount.Add(-1)
+	host.RequestCount.Add(1)
 
 	res, forwardErr := httpClient.Do(outReq)
 	if forwardErr != nil {
-		host.errorCount.Add(1)
+		host.ErrorCount.Add(1)
 		slog.Error("forwarding request failed", "error", forwardErr)
-		return nil, fmt.Errorf("forwarding request to host: %s failed", host.url)
+		return nil, fmt.Errorf("forwarding request to host: %s failed", host.Url)
 	}
 
 	if res.StatusCode >= 500 && res.StatusCode <= 599 {
-		host.errorCount.Add(1)
+		host.ErrorCount.Add(1)
 	}
 
 	return res, nil
 }
 
-func newForwardRequestHandler(maxRetries int, balancer Balancer) http.Handler {
+func NewForwardRequestHandler(maxRetries int, balancer balancer.Balancer, servers []*server.Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		host, noServerErr := getServer(balancer)
 		if noServerErr != nil {
@@ -59,10 +61,10 @@ func newForwardRequestHandler(maxRetries int, balancer Balancer) http.Handler {
 				res.Body.Close()
 			}
 
-			host.mu.Lock()
-			host.healthy = false
-			host.mu.Unlock()
-			rebuildHealthyServers()
+			host.Mu.Lock()
+			host.Healthy = false
+			host.Mu.Unlock()
+			RebuildHealthyServers(servers)
 
 			host, noServerErr = getServer(balancer)
 			if noServerErr != nil {
@@ -95,4 +97,14 @@ func newForwardRequestHandler(maxRetries int, balancer Balancer) http.Handler {
 			return
 		}
 	})
+}
+
+func getServer(balancer balancer.Balancer) (*server.Server, error) {
+	raw := healthyServers.Load()
+	if raw == nil {
+		return nil, fmt.Errorf("no healthy servers available")
+	}
+
+	servers := raw.([]*server.Server)
+	return balancer.Next(servers)
 }

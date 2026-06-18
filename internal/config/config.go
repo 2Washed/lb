@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -47,7 +47,7 @@ var stringToAlgo = map[string]BalancingAlgorithm{
 	"least-connections": LeastConnectionsAlgo,
 }
 
-var algoToString = map[BalancingAlgorithm]string{
+var AlgoToString = map[BalancingAlgorithm]string{
 	RoundRobinAlgo:       "round-robin",
 	LeastConnectionsAlgo: "least-connections",
 }
@@ -96,7 +96,7 @@ func readConfigurationFile() []byte {
 	return configFile
 }
 
-func getConfiguration() *Configuration {
+func GetConfiguration() *Configuration {
 	configFileContent := readConfigurationFile()
 	var configuration Configuration
 	err := json.Unmarshal(configFileContent, &configuration)

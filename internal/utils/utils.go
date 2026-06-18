@@ -1,6 +1,6 @@
-package main
+package utils
 
-func filter[T any](arr []T, predicate func(T) bool) []T {
+func Filter[T any](arr []T, predicate func(T) bool) []T {
 	out := make([]T, 0, len(arr))
 
 	for _, item := range arr {

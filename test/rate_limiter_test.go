@@ -1,7 +1,8 @@
-package main
+package test
 
 import (
 	"fmt"
+	"lb/internal/ratelimiter"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -37,15 +38,15 @@ func TestTokenBucket_tryAllow_should_update_token_count(t *testing.T) {
 	expectedTokenCount := float64(rate) - 1
 	epsilon := float64(0.0001)
 
-	if math.Abs(tokenBucket.tokens-expectedTokenCount) > epsilon {
-		t.Errorf("expected %f to equal %f", tokenBucket.tokens, expectedTokenCount)
+	if math.Abs(tokenBucket.Tokens-expectedTokenCount) > epsilon {
+		t.Errorf("expected %f to equal %f", tokenBucket.Tokens, expectedTokenCount)
 	}
 }
 
 func TestRateLimiter_Hit_should_return_err_if_rate_limit_reached(t *testing.T) {
 	rate, burstSeconds := 10, 1
 	expiry, _ := time.ParseDuration("10s")
-	rateLimiter := NewRateLimiter(rate, burstSeconds, expiry)
+	rateLimiter := ratelimiter.NewRateLimiter(rate, burstSeconds, expiry)
 	userId := "user"
 
 	for i := 0; i < rate; i++ {
@@ -66,7 +67,7 @@ func TestRateLimiter_Hit_should_return_err_if_rate_limit_reached(t *testing.T) {
 func TestRateLimiter_Hit_concurrency(t *testing.T) {
 	rate, burstSeconds := 100, 1
 	expiry, _ := time.ParseDuration("10s")
-	rateLimiter := NewRateLimiter(rate, burstSeconds, expiry)
+	rateLimiter := ratelimiter.NewRateLimiter(rate, burstSeconds, expiry)
 
 	var wg sync.WaitGroup
 	var allowed atomic.Int32
@@ -94,10 +95,10 @@ func TestRateLimiter_Hit_concurrency(t *testing.T) {
 	}
 }
 
-func newTestTokenBucket(tokens float64, lastRefill time.Time, maxTokens int) *TokenBucket {
-	return &TokenBucket{
-		tokens:     tokens,
-		lastRefill: lastRefill,
-		maxTokens:  maxTokens,
+func newTestTokenBucket(tokens float64, lastRefill time.Time, maxTokens int) *ratelimiter.TokenBucket {
+	return &ratelimiter.TokenBucket{
+		Tokens:     tokens,
+		LastRefill: lastRefill,
+		MaxTokens:  maxTokens,
 	}
 }
