@@ -1,8 +1,9 @@
-package test
+package balancer_test
 
 import (
 	"lb/internal/balancer"
 	"lb/internal/server"
+	"lb/test"
 	"testing"
 )
 
@@ -23,7 +24,7 @@ func TestLC_NoHealthyServer(t *testing.T) {
 
 func TestLC_SingleServer(t *testing.T) {
 	rb := balancer.LeastConnections{}
-	healthyServer := newTestServer("s1", 1, true)
+	healthyServer := test.NewTestServer("s1", 1, true)
 	servers := []*server.Server{healthyServer}
 
 	server, err := rb.Next(servers)
@@ -40,9 +41,9 @@ func TestLC_SingleServer(t *testing.T) {
 func TestLC_multiple_servers(t *testing.T) {
 	rb := balancer.LeastConnections{}
 
-	s1 := newTestServer("s1", 1, true)
+	s1 := test.NewTestServer("s1", 1, true)
 	s1.ActiveConnectionsCount.Store(1)
-	s2 := newTestServer("s2", 1, true)
+	s2 := test.NewTestServer("s2", 1, true)
 	s2.ActiveConnectionsCount.Store(2)
 
 	servers := []*server.Server{s1, s2}

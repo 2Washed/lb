@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var healthyServers atomic.Value
+var HealthyServers atomic.Value //TODO fix this
 var rebuildMu sync.Mutex
 
 func UpdateHealthyServers(servers []*server.Server, healthCheckDuration time.Duration) {
@@ -43,7 +43,7 @@ func RebuildHealthyServers(servers []*server.Server) {
 		server.Mu.RUnlock()
 		return healthy
 	})
-	healthyServers.Store(okServers)
+	HealthyServers.Store(okServers)
 }
 
 func isServerHealthy(server *server.Server) bool {

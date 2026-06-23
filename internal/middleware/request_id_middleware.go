@@ -21,7 +21,7 @@ func WithRequestID() Middleware {
 	}
 }
 
-func getRequestID(ctx context.Context) string {
+func GetRequestID(ctx context.Context) string {
 	id, _ := ctx.Value(REQUEST_ID_KEY).(string)
 	return id
 }

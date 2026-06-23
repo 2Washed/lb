@@ -1,8 +1,9 @@
-package test
+package balancer_test
 
 import (
 	"lb/internal/balancer"
 	"lb/internal/server"
+	"lb/test"
 	"sync"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestRoundRobin_NoHealthyServer(t *testing.T) {
 
 func TestRoundRobin_SingleServer(t *testing.T) {
 	rb := balancer.RoundRobin{}
-	healthyServer := newTestServer("s1", 1, true)
+	healthyServer := test.NewTestServer("s1", 1, true)
 	servers := []*server.Server{healthyServer}
 
 	server, err := rb.Next(servers)
@@ -40,8 +41,8 @@ func TestRoundRobin_SingleServer(t *testing.T) {
 
 func TestRoundRobin_multiple_servers(t *testing.T) {
 	rb := balancer.RoundRobin{}
-	s1 := newTestServer("s1", 1, true)
-	s2 := newTestServer("s2", 1, true)
+	s1 := test.NewTestServer("s1", 1, true)
+	s2 := test.NewTestServer("s2", 1, true)
 
 	servers := []*server.Server{s1, s2}
 
@@ -64,9 +65,9 @@ func TestRoundRobin_multiple_servers(t *testing.T) {
 
 func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
 	rb := balancer.RoundRobin{}
-	s1 := newTestServer("s1", 3, true)
-	s2 := newTestServer("s2", 1, true)
-	s3 := newTestServer("s3", 2, true)
+	s1 := test.NewTestServer("s1", 3, true)
+	s2 := test.NewTestServer("s2", 1, true)
+	s3 := test.NewTestServer("s3", 2, true)
 
 	servers := []*server.Server{s1, s2, s3}
 
@@ -89,9 +90,9 @@ func TestWeightedRoundRobin_multiple_servers(t *testing.T) {
 
 func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
 	rb := balancer.RoundRobin{}
-	s1 := newTestServer("s1", 3, true)
-	s2 := newTestServer("s2", 1, true)
-	s3 := newTestServer("s3", 2, true)
+	s1 := test.NewTestServer("s1", 3, true)
+	s2 := test.NewTestServer("s2", 1, true)
+	s3 := test.NewTestServer("s3", 2, true)
 
 	servers := []*server.Server{s1, s2, s3}
 
@@ -122,13 +123,5 @@ func TestWeightedRoundRobin_multiple_servers_concurrent(t *testing.T) {
 
 	if count[s1.Url] > int(requestCount*.505) || count[s2.Url] > int(requestCount*.167) || count[s3.Url] > int(requestCount*.334) {
 		t.Errorf("unexpected distribution: %+v", count)
-	}
-}
-
-func newTestServer(url string, weight int, healthy bool) *server.Server {
-	return &server.Server{
-		Url:     url,
-		Weight:  weight,
-		Healthy: healthy,
 	}
 }

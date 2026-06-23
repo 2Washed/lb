@@ -8,18 +8,18 @@ import (
 type BalancingAlgorithm int
 
 const (
-	RoundRobinAlgo BalancingAlgorithm = iota //TODO remove 'Algo from the name after moving to separate packages'
-	LeastConnectionsAlgo
+	RoundRobin BalancingAlgorithm = iota
+	LeastConnections
 )
 
 var stringToAlgo = map[string]BalancingAlgorithm{
-	"round-robin":       RoundRobinAlgo,
-	"least-connections": LeastConnectionsAlgo,
+	"round-robin":       RoundRobin,
+	"least-connections": LeastConnections,
 }
 
 var AlgoToString = map[BalancingAlgorithm]string{
-	RoundRobinAlgo:       "round-robin",
-	LeastConnectionsAlgo: "least-connections",
+	RoundRobin:       "round-robin",
+	LeastConnections: "least-connections",
 }
 
 func (algo *BalancingAlgorithm) UnmarshalJSON(b []byte) error {

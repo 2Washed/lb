@@ -11,6 +11,7 @@ import (
 	"lb/internal/server"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 var servers []*server.Server
@@ -45,8 +46,10 @@ func main() {
 
 	http.HandleFunc("/metrics", metrics.NewMetricsRequestHandler(servers))
 
+	var httpClient = &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
+
 	handler := middleware.Chain(
-		proxy.NewForwardRequestHandler(maxRetries, balancer, servers),
+		proxy.NewForwardRequestHandler(maxRetries, balancer, servers, httpClient),
 		middleware.WithRateLimiter(rl),
 		middleware.WithLogging(),
 		middleware.WithRequestID(),
@@ -83,9 +86,9 @@ func mapServerConfigToServer(serverConfig *config.ServerConfiguration) *server.S
 
 func balancingAlgoToBalancer(algo config.BalancingAlgorithm) balancer.Balancer {
 	switch algo {
-	case config.RoundRobinAlgo:
+	case config.RoundRobin:
 		return &balancer.RoundRobin{}
-	case config.LeastConnectionsAlgo:
+	case config.LeastConnections:
 		return &balancer.LeastConnections{}
 	}
 

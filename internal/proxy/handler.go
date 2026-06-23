@@ -8,12 +8,9 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
-var httpClient = &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
-
-func forwardRequest(req *http.Request, host *server.Server) (*http.Response, error) {
+func forwardRequest(httpClient *http.Client, req *http.Request, host *server.Server) (*http.Response, error) {
 	slog.Info("forwarding request", "to", host.Url)
 	outReq := req.Clone(req.Context())
 	outReq.URL.Scheme = "http"
@@ -39,7 +36,12 @@ func forwardRequest(req *http.Request, host *server.Server) (*http.Response, err
 	return res, nil
 }
 
-func NewForwardRequestHandler(maxRetries int, balancer balancer.Balancer, servers []*server.Server) http.Handler {
+func NewForwardRequestHandler(
+	maxRetries int,
+	balancer balancer.Balancer,
+	servers []*server.Server,
+	httpClient *http.Client,
+) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		host, noServerErr := getServer(balancer)
 		if noServerErr != nil {
@@ -54,7 +56,7 @@ func NewForwardRequestHandler(maxRetries int, balancer balancer.Balancer, server
 			canRetry = true
 		}
 
-		res, forwardErr := forwardRequest(req, host)
+		res, forwardErr := forwardRequest(httpClient, req, host)
 		retries := 1
 		for forwardErr != nil && retries < maxRetries && canRetry {
 			if res != nil {
@@ -73,7 +75,7 @@ func NewForwardRequestHandler(maxRetries int, balancer balancer.Balancer, server
 				return
 			}
 
-			res, forwardErr = forwardRequest(req, host)
+			res, forwardErr = forwardRequest(httpClient, req, host)
 			retries++
 		}
 
@@ -100,7 +102,7 @@ func NewForwardRequestHandler(maxRetries int, balancer balancer.Balancer, server
 }
 
 func getServer(balancer balancer.Balancer) (*server.Server, error) {
-	raw := healthyServers.Load()
+	raw := HealthyServers.Load()
 	if raw == nil {
 		return nil, fmt.Errorf("no healthy servers available")
 	}

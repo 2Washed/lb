@@ -20,7 +20,7 @@ func WithLogging() Middleware {
 				"url", path,
 				"source", r.RemoteAddr,
 				"time", time.Since(start),
-				"request-id", getRequestID(r.Context()),
+				"request-id", GetRequestID(r.Context()),
 			)
 		})
 	}
