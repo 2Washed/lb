@@ -60,7 +60,7 @@ func (r *RateLimiter) PurgeStale() {
 
 	for id, bucket := range r.buckets {
 		bucket.Mu.Lock()
-		if time.Since(bucket.LastRefill).Seconds() > 99 {
+		if time.Since(bucket.LastRefill) > r.expiry {
 			delete(r.buckets, id)
 		}
 		bucket.Mu.Unlock()

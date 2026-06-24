@@ -11,7 +11,6 @@ import (
 	"lb/internal/server"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 var servers []*server.Server
@@ -46,7 +45,9 @@ func main() {
 
 	http.HandleFunc("/metrics", metrics.NewMetricsRequestHandler(servers))
 
-	var httpClient = &http.Client{Timeout: 5 * time.Second} //TODO add to config :)
+	var httpClient = &http.Client{
+		Timeout: configuration.Timeout.Duration,
+	}
 
 	handler := middleware.Chain(
 		proxy.NewForwardRequestHandler(maxRetries, balancer, servers, httpClient),

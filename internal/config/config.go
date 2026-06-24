@@ -12,6 +12,7 @@ const DEFAULT_CONFIG_FILE = "config.json"
 
 type Configuration struct {
 	Port                uint16                 `json:"port"`
+	Timeout             Duration               `json:"timeout"`
 	HealthCheckInterval Duration               `json:"healthCheckInterval"`
 	MaxRetries          int                    `json:"maxRetries"`
 	Servers             []*ServerConfiguration `json:"servers"`

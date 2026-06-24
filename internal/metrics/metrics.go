@@ -3,7 +3,7 @@ package metrics
 import (
 	"encoding/json"
 	"lb/internal/server"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -56,7 +56,7 @@ func NewMetricsRequestHandler(servers []*server.Server) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewEncoder(w).Encode(metrics)
 		if err != nil {
-			log.Printf("[ERROR] unexpected error while writing response, error: %v\n", err)
+			slog.Error("unexpected error while writing response", "error", err)
 			return
 		}
 	}

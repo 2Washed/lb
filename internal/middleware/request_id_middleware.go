@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-type contextKey = string
+type contextKey string
 
 const REQUEST_ID_KEY contextKey = "requestId"
 

@@ -1,5 +1,6 @@
 {
   "port": 8080,
+  "timeout": "10s",
   "healthCheckInterval": "10s",
   "maxRetries": 3,
   "servers": [
